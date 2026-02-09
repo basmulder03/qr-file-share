@@ -514,6 +514,12 @@
         // Generate QR code
         generateBtn.addEventListener('click', async () => {
             if (!fileData) return;
+            await generateQRCodes();
+        });
+
+        // Function to generate QR codes from current fileData
+        async function generateQRCodes() {
+            if (!fileData) return;
 
             try {
                 // Create URL with file data
@@ -561,7 +567,7 @@
                 console.error('Error:', e);
                 showError('Error generating QR code. File might be too large even with compression.');
             }
-        });
+        }
 
         // Copy URL
         copyBtn.addEventListener('click', () => {
@@ -579,11 +585,7 @@
         document.getElementById('qrSize').addEventListener('change', () => {
             // If a QR code is currently displayed, regenerate it with the new size
             if (qrCodeInstance || window.qrChunksData) {
-                const generateButton = document.getElementById('generateBtn');
-                if (generateButton) {
-                    // Trigger regeneration
-                    generateButton.click();
-                }
+                generateQRCodes();
             }
         });
 
