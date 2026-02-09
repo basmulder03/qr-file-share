@@ -611,15 +611,112 @@
             const totalChunks = chunks.length;
             console.log(`Splitting data into ${totalChunks} QR codes`);
             
+            // Store chunks data globally for sequential mode
+            window.qrChunksData = {
+                chunks: chunks,
+                baseUrl: baseUrl,
+                totalChunks: totalChunks,
+                fileData: fileData
+            };
+            
             // Clear and prepare QR code container
             const qrCodeDiv = document.getElementById('qrcode');
             qrCodeDiv.innerHTML = '';
             qrCodeDiv.style.display = 'flex';
-            qrCodeDiv.style.flexWrap = 'wrap';
-            qrCodeDiv.style.justifyContent = 'center';
+            qrCodeDiv.style.flexDirection = 'column';
+            qrCodeDiv.style.alignItems = 'center';
             qrCodeDiv.style.gap = '20px';
             
-            // Generate a QR code for each chunk
+            // Add mode toggle buttons
+            const modeToggle = document.createElement('div');
+            modeToggle.style.cssText = 'display: flex; gap: 10px; margin-bottom: 20px;';
+            modeToggle.innerHTML = `
+                <button id="sequentialModeBtn" class="btn" style="padding: 8px 20px; font-size: 0.9rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                    📱 Sequential Mode (Recommended)
+                </button>
+                <button id="allCodesBtn" class="btn" style="padding: 8px 20px; font-size: 0.9rem; background: #999;">
+                    🔢 Show All Codes
+                </button>
+            `;
+            qrCodeDiv.appendChild(modeToggle);
+            
+            // Container for QR codes
+            const qrCodesContainer = document.createElement('div');
+            qrCodesContainer.id = 'qrCodesContainer';
+            qrCodesContainer.style.cssText = 'display: flex; flex-wrap: wrap; justify-content: center; gap: 20px;';
+            qrCodeDiv.appendChild(qrCodesContainer);
+            
+            // Set up button click handlers
+            document.getElementById('sequentialModeBtn').onclick = () => {
+                showSequentialMode();
+                document.getElementById('sequentialModeBtn').style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+                document.getElementById('allCodesBtn').style.background = '#999';
+            };
+            
+            document.getElementById('allCodesBtn').onclick = () => {
+                showAllCodesMode();
+                document.getElementById('allCodesBtn').style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+                document.getElementById('sequentialModeBtn').style.background = '#999';
+            };
+            
+            // Start with sequential mode by default
+            showSequentialMode();
+            
+            // Update share URL display
+            shareUrl.innerHTML = '';
+            const infoDiv = document.createElement('div');
+            infoDiv.style.cssText = 'text-align: center;';
+            infoDiv.innerHTML = `
+                <strong style="color: #667eea;">📱 Multiple QR Codes Required</strong><br>
+                <span style="color: #666; font-size: 0.9rem;">
+                    File is too large for a single QR code (${totalChunks} codes needed).
+                    ${fileData.compressed ? '<br>(File is compressed)' : ''}
+                </span>
+            `;
+            shareUrl.appendChild(infoDiv);
+        }
+        
+        // Show sequential mode - one QR code at a time with auto-advance
+        function showSequentialMode() {
+            if (!window.qrChunksData) return;
+            
+            const container = document.getElementById('qrCodesContainer');
+            container.innerHTML = '';
+            container.style.display = 'flex';
+            container.style.flexDirection = 'column';
+            container.style.alignItems = 'center';
+            
+            // Display first QR code
+            displayQRCodeAtIndex(0);
+            
+            // Add instruction
+            const instruction = document.createElement('div');
+            instruction.className = 'info-box';
+            instruction.style.marginTop = '20px';
+            instruction.style.maxWidth = '500px';
+            instruction.innerHTML = `
+                <strong>📱 Sequential Scanning Mode</strong><br>
+                <span style="font-size: 0.9rem;">
+                    Scan this QR code on your other device. After scanning, the next QR code will automatically appear here.
+                    Keep this page open and scan each code as it appears.
+                </span>
+            `;
+            container.appendChild(instruction);
+        }
+        
+        // Show all codes mode - display all QR codes at once
+        function showAllCodesMode() {
+            if (!window.qrChunksData) return;
+            
+            const container = document.getElementById('qrCodesContainer');
+            container.innerHTML = '';
+            container.style.display = 'flex';
+            container.style.flexWrap = 'wrap';
+            container.style.justifyContent = 'center';
+            
+            const { chunks, baseUrl, totalChunks } = window.qrChunksData;
+            
+            // Generate all QR codes
             chunks.forEach((chunk, index) => {
                 const chunkUrl = `${baseUrl}?part=${index + 1}&total=${totalChunks}&data=${chunk}`;
                 
@@ -638,7 +735,6 @@
                 qrWrapper.appendChild(qrElement);
                 
                 // Generate QR code
-                // Using error correction level M (medium) to maximize data capacity for multi-part codes
                 new QRCode(qrElement, {
                     text: chunkUrl,
                     width: 200,
@@ -648,21 +744,100 @@
                     correctLevel: QRCode.CorrectLevel.M
                 });
                 
-                qrCodeDiv.appendChild(qrWrapper);
+                container.appendChild(qrWrapper);
             });
             
-            // Update share URL display
-            shareUrl.innerHTML = '';
-            const infoDiv = document.createElement('div');
-            infoDiv.style.cssText = 'text-align: center;';
-            infoDiv.innerHTML = `
-                <strong style="color: #667eea;">📱 Multiple QR Codes Required</strong><br>
-                <span style="color: #666; font-size: 0.9rem;">
-                    File is too large for a single QR code. Scan all ${totalChunks} codes in order (1 → ${totalChunks}).
-                    ${fileData.compressed ? '<br>(File is compressed)' : ''}
+            // Add instruction
+            const instruction = document.createElement('div');
+            instruction.className = 'info-box';
+            instruction.style.marginTop = '20px';
+            instruction.style.width = '100%';
+            instruction.innerHTML = `
+                <strong>🔢 All Codes Mode</strong><br>
+                <span style="font-size: 0.9rem;">
+                    Scan all ${totalChunks} QR codes in order (1 → ${totalChunks}) on your other device.
                 </span>
             `;
-            shareUrl.appendChild(infoDiv);
+            container.appendChild(instruction);
+        }
+        
+        // Display a specific QR code by index
+        function displayQRCodeAtIndex(index) {
+            if (!window.qrChunksData) return;
+            
+            const { chunks, baseUrl, totalChunks } = window.qrChunksData;
+            const container = document.getElementById('qrCodesContainer');
+            
+            // Remove previous QR code display (keep instruction)
+            const existingQR = container.querySelector('.qr-single-display');
+            if (existingQR) existingQR.remove();
+            
+            // Create container for this QR code
+            const qrWrapper = document.createElement('div');
+            qrWrapper.className = 'qr-single-display';
+            qrWrapper.style.cssText = 'text-align: center; padding: 20px; background: white; border-radius: 12px; border: 3px solid #667eea; box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);';
+            
+            // Add label with progress
+            const label = document.createElement('div');
+            label.textContent = `QR Code ${index + 1} of ${totalChunks}`;
+            label.style.cssText = 'font-weight: 700; color: #667eea; margin-bottom: 15px; font-size: 1.2rem;';
+            qrWrapper.appendChild(label);
+            
+            // Create QR code element
+            const qrElement = document.createElement('div');
+            qrWrapper.appendChild(qrElement);
+            
+            // Generate QR code
+            const chunkUrl = `${baseUrl}?part=${index + 1}&total=${totalChunks}&data=${chunks[index]}`;
+            new QRCode(qrElement, {
+                text: chunkUrl,
+                width: 256,
+                height: 256,
+                colorDark: '#000000',
+                colorLight: '#ffffff',
+                correctLevel: QRCode.CorrectLevel.M
+            });
+            
+            // Add progress bar
+            const progressBar = document.createElement('div');
+            progressBar.style.cssText = 'margin-top: 15px; width: 100%; background: #e0e0e0; border-radius: 10px; height: 8px; overflow: hidden;';
+            const progressFill = document.createElement('div');
+            const progressPercent = ((index + 1) / totalChunks) * 100;
+            progressFill.style.cssText = `width: ${progressPercent}%; height: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); transition: width 0.3s ease;`;
+            progressBar.appendChild(progressFill);
+            qrWrapper.appendChild(progressBar);
+            
+            // Add progress text
+            const progressText = document.createElement('div');
+            progressText.style.cssText = 'margin-top: 8px; color: #666; font-size: 0.9rem;';
+            progressText.textContent = `Progress: ${index + 1}/${totalChunks} (${Math.round(progressPercent)}%)`;
+            qrWrapper.appendChild(progressText);
+            
+            // Insert before instruction
+            const instruction = container.querySelector('.info-box');
+            if (instruction) {
+                container.insertBefore(qrWrapper, instruction);
+            } else {
+                container.appendChild(qrWrapper);
+            }
+        }
+        
+        // Advance to next QR code in sequential mode
+        function advanceToNextQRCode(currentPart) {
+            if (!window.qrChunksData) return;
+            
+            const { totalChunks } = window.qrChunksData;
+            
+            // Check if we're in sequential mode
+            const container = document.getElementById('qrCodesContainer');
+            if (!container || container.style.flexDirection !== 'column') return;
+            
+            if (currentPart < totalChunks) {
+                // Show next QR code
+                setTimeout(() => {
+                    displayQRCodeAtIndex(currentPart);
+                }, 500); // Small delay for smooth transition
+            }
         }
         
         // Handle multi-part QR code scanning
@@ -711,7 +886,13 @@
                 const infoMsg = document.createElement('div');
                 infoMsg.className = 'info-box';
                 infoMsg.style.marginTop = '20px';
-                infoMsg.innerHTML = `<strong>Progress:</strong> ${partsReceived} of ${total} QR codes scanned. Please scan QR code ${partsReceived + 1}.`;
+                infoMsg.innerHTML = `
+                    <strong>✅ Part ${part} Scanned!</strong><br>
+                    Progress: ${partsReceived} of ${total} QR codes scanned.<br>
+                    <span style="color: #667eea; font-weight: 600;">
+                        ${part < total ? `→ The next QR code (${part + 1}/${total}) should now be displayed on the sharing device.` : ''}
+                    </span>
+                `;
                 
                 const downloadSection = document.getElementById('downloadSection');
                 const existingInfo = downloadSection.querySelector('.info-box');
@@ -719,6 +900,13 @@
                     existingInfo.replaceWith(infoMsg);
                 } else {
                     downloadSection.querySelector('.download-section').appendChild(infoMsg);
+                }
+                
+                // Trigger advancement to next QR code on the sender's device
+                // This uses localStorage as a cross-tab communication mechanism
+                if (part < total) {
+                    localStorage.setItem('qr_advance_to', part.toString());
+                    localStorage.removeItem('qr_advance_to'); // Trigger the event
                 }
             } else {
                 // All parts received, reconstruct the file
@@ -778,6 +966,14 @@
                 }
             }
         }
+        
+        // Listen for storage events to advance QR codes automatically
+        window.addEventListener('storage', (e) => {
+            if (e.key === 'qr_advance_to' && e.newValue) {
+                const nextPart = parseInt(e.newValue);
+                advanceToNextQRCode(nextPart);
+            }
+        });
         
         // Handle short URL redirect - TODO: Requires backend support
         async function handleShortUrl(shortUrl) {
