@@ -106,6 +106,19 @@
             cursor: not-allowed;
             transform: none;
         }
+        
+        .mode-btn {
+            padding: 8px 20px;
+            font-size: 0.9rem;
+        }
+        
+        .mode-btn.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        
+        .mode-btn.inactive {
+            background: #999;
+        }
 
         input[type="file"] {
             display: none;
@@ -294,10 +307,13 @@
         let fileName = null;
         let qrCodeInstance = null;
         
+        // Constants
         // Compression threshold (files larger than this will be compressed)
         const COMPRESSION_THRESHOLD = 100 * 1024; // 100KB
         // QR code capacity threshold (URLs longer than this will be split into multiple QR codes)
         const QR_CODE_THRESHOLD = 2000; // 2000 characters per QR code
+        // Transition delay for QR code auto-advancement (milliseconds)
+        const QR_TRANSITION_DELAY_MS = 500;
 
         // DOM elements
         const uploadArea = document.getElementById('uploadArea');
@@ -631,10 +647,10 @@
             const modeToggle = document.createElement('div');
             modeToggle.style.cssText = 'display: flex; gap: 10px; margin-bottom: 20px;';
             modeToggle.innerHTML = `
-                <button id="sequentialModeBtn" class="btn" style="padding: 8px 20px; font-size: 0.9rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                <button id="sequentialModeBtn" class="btn mode-btn active">
                     📱 Sequential Mode (Recommended)
                 </button>
-                <button id="allCodesBtn" class="btn" style="padding: 8px 20px; font-size: 0.9rem; background: #999;">
+                <button id="allCodesBtn" class="btn mode-btn inactive">
                     🔢 Show All Codes
                 </button>
             `;
@@ -649,14 +665,14 @@
             // Set up button click handlers
             document.getElementById('sequentialModeBtn').onclick = () => {
                 showSequentialMode();
-                document.getElementById('sequentialModeBtn').style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
-                document.getElementById('allCodesBtn').style.background = '#999';
+                document.getElementById('sequentialModeBtn').className = 'btn mode-btn active';
+                document.getElementById('allCodesBtn').className = 'btn mode-btn inactive';
             };
             
             document.getElementById('allCodesBtn').onclick = () => {
                 showAllCodesMode();
-                document.getElementById('allCodesBtn').style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
-                document.getElementById('sequentialModeBtn').style.background = '#999';
+                document.getElementById('allCodesBtn').className = 'btn mode-btn active';
+                document.getElementById('sequentialModeBtn').className = 'btn mode-btn inactive';
             };
             
             // Start with sequential mode by default
@@ -833,10 +849,10 @@
             if (!container || container.style.flexDirection !== 'column') return;
             
             if (currentPart < totalChunks) {
-                // Show next QR code
+                // Show next QR code with smooth transition
                 setTimeout(() => {
                     displayQRCodeAtIndex(currentPart);
-                }, 500); // Small delay for smooth transition
+                }, QR_TRANSITION_DELAY_MS);
             }
         }
         
@@ -905,8 +921,12 @@
                 // Trigger advancement to next QR code on the sender's device
                 // This uses localStorage as a cross-tab communication mechanism
                 if (part < total) {
-                    localStorage.setItem('qr_advance_to', part.toString());
-                    localStorage.removeItem('qr_advance_to'); // Trigger the event
+                    // Use timestamp to ensure unique value and trigger storage event
+                    localStorage.setItem('qr_advance_to', `${part}_${Date.now()}`);
+                    // Clean up after a short delay
+                    setTimeout(() => {
+                        localStorage.removeItem('qr_advance_to');
+                    }, 100);
                 }
             } else {
                 // All parts received, reconstruct the file
@@ -970,7 +990,8 @@
         // Listen for storage events to advance QR codes automatically
         window.addEventListener('storage', (e) => {
             if (e.key === 'qr_advance_to' && e.newValue) {
-                const nextPart = parseInt(e.newValue);
+                // Extract part number from value (format: "partNumber_timestamp")
+                const nextPart = parseInt(e.newValue.split('_')[0]);
                 advanceToNextQRCode(nextPart);
             }
         });
