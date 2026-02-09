@@ -166,6 +166,131 @@
             margin: 20px 0;
         }
 
+        .enlarge-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 10px 25px;
+            font-size: 0.9rem;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+            margin-top: 15px;
+        }
+
+        .enlarge-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+        }
+
+        /* Modal styles */
+        .qr-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .qr-modal.show {
+            display: flex;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+
+        .qr-modal-content {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            max-width: 90%;
+            max-height: 90%;
+            overflow: auto;
+            position: relative;
+            animation: slideUp 0.3s ease;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+        }
+
+        @keyframes slideUp {
+            from {
+                transform: translateY(50px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .qr-modal-close {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: #ff5252;
+            color: white;
+            border: none;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            font-size: 1.5rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            font-weight: bold;
+            line-height: 1;
+        }
+
+        .qr-modal-close:hover {
+            background: #d32f2f;
+            transform: rotate(90deg);
+        }
+
+        .qr-modal-title {
+            text-align: center;
+            color: #667eea;
+            margin-bottom: 20px;
+            font-size: 1.5rem;
+        }
+
+        .qr-modal-qr {
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        .qr-modal-qr img {
+            max-width: 100%;
+            height: auto;
+        }
+
+        /* Ensure progress bars and text are visible and larger in modal */
+        .qr-modal-qr .qr-progress-text {
+            font-size: 1.1rem;
+            color: #333;
+            margin-top: 15px;
+        }
+
+        .qr-modal-qr .qr-progress-bar {
+            height: 12px;
+            margin-top: 20px;
+        }
+
         .share-url {
             background: #f0f2ff;
             padding: 15px;
@@ -275,6 +400,7 @@
             <div class="qr-container" id="qrContainer">
                 <h3 style="margin-bottom: 15px;">Scan to Download</h3>
                 <div id="qrcode"></div>
+                <button class="btn enlarge-btn" id="enlargeBtn">🔍 View Larger</button>
                 <div class="share-url" id="shareUrl"></div>
                 <button class="btn copy-btn" id="copyBtn">📋 Copy Link</button>
                 <div class="info-box">
@@ -298,6 +424,15 @@
                 </div>
                 <button class="btn download-btn" id="downloadBtn">⬇️ Download File</button>
             </div>
+        </div>
+    </div>
+
+    <!-- QR Code Enlarge Modal -->
+    <div class="qr-modal" id="qrModal">
+        <div class="qr-modal-content">
+            <button class="qr-modal-close" id="modalClose">×</button>
+            <h2 class="qr-modal-title">Scan QR Code</h2>
+            <div class="qr-modal-qr" id="modalQRContainer"></div>
         </div>
     </div>
 
@@ -457,6 +592,12 @@
         // Generate QR code
         generateBtn.addEventListener('click', async () => {
             if (!fileData) return;
+            await generateQRCodes();
+        });
+
+        // Function to generate QR codes from current fileData
+        async function generateQRCodes() {
+            if (!fileData) return;
 
             try {
                 // Create URL with file data
@@ -503,7 +644,7 @@
                 console.error('Error:', e);
                 showError('Error generating QR code. File might be too large even with compression.');
             }
-        });
+        }
 
         // Copy URL
         copyBtn.addEventListener('click', () => {
@@ -515,6 +656,74 @@
                     copyBtn.textContent = originalText;
                 }, 2000);
             });
+        });
+
+        // Enlarge button and modal handlers
+        const enlargeBtn = document.getElementById('enlargeBtn');
+        const qrModal = document.getElementById('qrModal');
+        const modalClose = document.getElementById('modalClose');
+        const modalQRContainer = document.getElementById('modalQRContainer');
+
+        enlargeBtn.addEventListener('click', () => {
+            // Clone the current QR code display into the modal
+            modalQRContainer.innerHTML = '';
+            
+            if (window.qrChunksData) {
+                // For multiple QR codes, show the current one that's displayed
+                const currentQR = document.querySelector('#qrCodesContainer .qr-single-display');
+                if (currentQR) {
+                    const clone = currentQR.cloneNode(true);
+                    // Scale up the QR code by changing the styles
+                    const qrImg = clone.querySelector('img');
+                    if (qrImg) {
+                        qrImg.style.width = '512px';
+                        qrImg.style.height = '512px';
+                    }
+                    modalQRContainer.appendChild(clone);
+                } else {
+                    // Show all codes mode - enlarge all
+                    const allCodes = document.querySelectorAll('#qrCodesContainer .qr-wrapper');
+                    allCodes.forEach(wrapper => {
+                        const clone = wrapper.cloneNode(true);
+                        const qrImg = clone.querySelector('img');
+                        if (qrImg) {
+                            qrImg.style.width = '400px';
+                            qrImg.style.height = '400px';
+                        }
+                        modalQRContainer.appendChild(clone);
+                    });
+                }
+            } else {
+                // For single QR code, enlarge it
+                const qrDiv = document.getElementById('qrcode');
+                const clone = qrDiv.cloneNode(true);
+                const qrImg = clone.querySelector('img');
+                if (qrImg) {
+                    qrImg.style.width = '512px';
+                    qrImg.style.height = '512px';
+                }
+                modalQRContainer.appendChild(clone);
+            }
+            
+            qrModal.classList.add('show');
+        });
+
+        modalClose.addEventListener('click', () => {
+            qrModal.classList.remove('show');
+        });
+
+        // Close modal when clicking outside the content
+        qrModal.addEventListener('click', (e) => {
+            if (e.target === qrModal) {
+                qrModal.classList.remove('show');
+            }
+        });
+
+        // Close modal with Escape key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && qrModal.classList.contains('show')) {
+                qrModal.classList.remove('show');
+            }
         });
 
         // Download file
@@ -816,6 +1025,7 @@
             
             // Add progress bar
             const progressBar = document.createElement('div');
+            progressBar.className = 'qr-progress-bar';
             progressBar.style.cssText = 'margin-top: 15px; width: 100%; background: #e0e0e0; border-radius: 10px; height: 8px; overflow: hidden;';
             const progressFill = document.createElement('div');
             const progressPercent = ((index + 1) / totalChunks) * 100;
@@ -825,6 +1035,7 @@
             
             // Add progress text
             const progressText = document.createElement('div');
+            progressText.className = 'qr-progress-text';
             progressText.style.cssText = 'margin-top: 8px; color: #666; font-size: 0.9rem;';
             progressText.textContent = `Progress: ${index + 1}/${totalChunks} (${Math.round(progressPercent)}%)`;
             qrWrapper.appendChild(progressText);
