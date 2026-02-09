@@ -279,16 +279,16 @@
             height: auto;
         }
 
-        /* Ensure progress bars are visible and larger in modal */
-        .qr-modal-qr .qr-single-display > div:last-of-type {
-            font-size: 1.1rem !important;
-            color: #333 !important;
-            margin-top: 15px !important;
+        /* Ensure progress bars and text are visible and larger in modal */
+        .qr-modal-qr .qr-progress-text {
+            font-size: 1.1rem;
+            color: #333;
+            margin-top: 15px;
         }
 
-        .qr-modal-qr .qr-single-display > div:nth-last-of-type(2) {
-            height: 12px !important;
-            margin-top: 20px !important;
+        .qr-modal-qr .qr-progress-bar {
+            height: 12px;
+            margin-top: 20px;
         }
 
         .share-url {
@@ -1025,6 +1025,7 @@
             
             // Add progress bar
             const progressBar = document.createElement('div');
+            progressBar.className = 'qr-progress-bar';
             progressBar.style.cssText = 'margin-top: 15px; width: 100%; background: #e0e0e0; border-radius: 10px; height: 8px; overflow: hidden;';
             const progressFill = document.createElement('div');
             const progressPercent = ((index + 1) / totalChunks) * 100;
@@ -1034,6 +1035,7 @@
             
             // Add progress text
             const progressText = document.createElement('div');
+            progressText.className = 'qr-progress-text';
             progressText.style.cssText = 'margin-top: 8px; color: #666; font-size: 0.9rem;';
             progressText.textContent = `Progress: ${index + 1}/${totalChunks} (${Math.round(progressPercent)}%)`;
             qrWrapper.appendChild(progressText);
