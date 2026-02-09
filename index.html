@@ -399,6 +399,7 @@
 
             <div class="qr-container" id="qrContainer">
                 <h3 style="margin-bottom: 15px;">Scan to Download</h3>
+                <div id="p2pStatus" style="font-size: 0.9rem; margin-bottom: 10px; color: #999;">⚫ P2P: Not connected</div>
                 <div id="qrcode"></div>
                 <button class="btn enlarge-btn" id="enlargeBtn">🔍 View Larger</button>
                 <div class="share-url" id="shareUrl"></div>
@@ -449,6 +450,209 @@
         const QR_CODE_THRESHOLD = 2000; // 2000 characters per QR code
         // Transition delay for QR code auto-advancement (milliseconds)
         const QR_TRANSITION_DELAY_MS = 500;
+        
+        // BroadcastChannel for cross-tab communication (with fallback)
+        let qrBroadcastChannel = null;
+        try {
+            if (typeof BroadcastChannel !== 'undefined') {
+                qrBroadcastChannel = new BroadcastChannel('qr_code_channel');
+                qrBroadcastChannel.onmessage = (event) => {
+                    if (event.data.type === 'advance_qr' && event.data.nextPart !== undefined) {
+                        advanceToNextQRCode(event.data.nextPart);
+                    }
+                };
+            }
+        } catch (e) {
+            console.log('BroadcastChannel not available, using localStorage fallback');
+        }
+        
+        // WebRTC P2P Communication for cross-device auto-advance
+        let peerConnection = null;
+        let dataChannel = null;
+        let p2pSessionId = null;
+        let isP2PInitiator = false;
+        
+        // STUN servers for NAT traversal (using free public STUN servers)
+        const rtcConfiguration = {
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' }
+            ]
+        };
+        
+        // Initialize WebRTC peer connection as sender (initiator)
+        async function initP2PSender() {
+            try {
+                isP2PInitiator = true;
+                p2pSessionId = generateSessionId();
+                peerConnection = new RTCPeerConnection(rtcConfiguration);
+                
+                // Create data channel for sending advance signals
+                dataChannel = peerConnection.createDataChannel('qr-advance');
+                
+                dataChannel.onopen = () => {
+                    console.log('P2P Data channel opened (sender)');
+                    updateP2PStatus('connected');
+                };
+                
+                dataChannel.onclose = () => {
+                    console.log('P2P Data channel closed');
+                    updateP2PStatus('disconnected');
+                };
+                
+                // Create offer
+                const offer = await peerConnection.createOffer();
+                await peerConnection.setLocalDescription(offer);
+                
+                // Wait for ICE gathering to complete
+                await waitForICEGathering(peerConnection);
+                
+                // Return the complete offer with ICE candidates
+                return {
+                    sessionId: p2pSessionId,
+                    offer: btoa(JSON.stringify(peerConnection.localDescription))
+                };
+            } catch (error) {
+                console.error('Failed to initialize P2P sender:', error);
+                return null;
+            }
+        }
+        
+        // Initialize WebRTC peer connection as receiver (responder)
+        async function initP2PReceiver(sessionId, offerB64) {
+            try {
+                isP2PInitiator = false;
+                p2pSessionId = sessionId;
+                peerConnection = new RTCPeerConnection(rtcConfiguration);
+                
+                // Set up data channel handler
+                peerConnection.ondatachannel = (event) => {
+                    dataChannel = event.channel;
+                    
+                    dataChannel.onopen = () => {
+                        console.log('P2P Data channel opened (receiver)');
+                        updateP2PStatus('connected');
+                    };
+                    
+                    dataChannel.onclose = () => {
+                        console.log('P2P Data channel closed');
+                        updateP2PStatus('disconnected');
+                    };
+                    
+                    dataChannel.onmessage = (event) => {
+                        const message = JSON.parse(event.data);
+                        if (message.type === 'advance' && message.nextPart !== undefined) {
+                            advanceToNextQRCode(message.nextPart);
+                        }
+                    };
+                };
+                
+                // Set remote description (offer)
+                const offer = JSON.parse(atob(offerB64));
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+                
+                // Create answer
+                const answer = await peerConnection.createAnswer();
+                await peerConnection.setLocalDescription(answer);
+                
+                // Wait for ICE gathering
+                await waitForICEGathering(peerConnection);
+                
+                // Store answer for sending back via QR code response or localStorage
+                const answerB64 = btoa(JSON.stringify(peerConnection.localDescription));
+                
+                // Send answer back via localStorage (same-origin) for sender to pick up
+                localStorage.setItem(`p2p_answer_${sessionId}`, answerB64);
+                
+                return answerB64;
+            } catch (error) {
+                console.error('Failed to initialize P2P receiver:', error);
+                return null;
+            }
+        }
+        
+        // Complete P2P connection on sender side after receiving answer
+        async function completeP2PConnection(answerB64) {
+            try {
+                if (!peerConnection) return;
+                
+                const answer = JSON.parse(atob(answerB64));
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+                console.log('P2P connection established');
+            } catch (error) {
+                console.error('Failed to complete P2P connection:', error);
+            }
+        }
+        
+        // Send advance signal via P2P
+        function sendP2PAdvance(nextPart) {
+            if (dataChannel && dataChannel.readyState === 'open') {
+                dataChannel.send(JSON.stringify({
+                    type: 'advance',
+                    nextPart: nextPart
+                }));
+                return true;
+            }
+            return false;
+        }
+        
+        // Wait for ICE gathering to complete
+        function waitForICEGathering(pc) {
+            return new Promise((resolve) => {
+                if (pc.iceGatheringState === 'complete') {
+                    resolve();
+                } else {
+                    const checkState = () => {
+                        if (pc.iceGatheringState === 'complete') {
+                            pc.removeEventListener('icegatheringstatechange', checkState);
+                            resolve();
+                        }
+                    };
+                    pc.addEventListener('icegatheringstatechange', checkState);
+                    // Timeout after 5 seconds
+                    setTimeout(resolve, 5000);
+                }
+            });
+        }
+        
+        // Generate unique session ID
+        function generateSessionId() {
+            return 'qr_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        }
+        
+        // Update P2P connection status in UI
+        function updateP2PStatus(status) {
+            const statusElement = document.getElementById('p2pStatus');
+            if (statusElement) {
+                if (status === 'connected') {
+                    statusElement.textContent = '🟢 Connected';
+                    statusElement.style.color = '#4caf50';
+                } else if (status === 'connecting') {
+                    statusElement.textContent = '🟡 Connecting...';
+                    statusElement.style.color = '#ff9800';
+                } else {
+                    statusElement.textContent = '⚫ Disconnected';
+                    statusElement.style.color = '#999';
+                }
+            }
+        }
+        
+        // Poll for P2P answer from receiver (sender checks localStorage)
+        function pollForP2PAnswer() {
+            if (!p2pSessionId || !isP2PInitiator) return;
+            
+            const checkInterval = setInterval(() => {
+                const answerB64 = localStorage.getItem(`p2p_answer_${p2pSessionId}`);
+                if (answerB64) {
+                    clearInterval(checkInterval);
+                    localStorage.removeItem(`p2p_answer_${p2pSessionId}`);
+                    completeP2PConnection(answerB64);
+                }
+            }, 500);
+            
+            // Stop polling after 30 seconds
+            setTimeout(() => clearInterval(checkInterval), 30000);
+        }
 
         // DOM elements
         const uploadArea = document.getElementById('uploadArea');
@@ -470,6 +674,7 @@
             const partParam = urlParams.get('part');
             const totalParam = urlParams.get('total');
             const dataParam = urlParams.get('data');
+            const p2pParam = urlParams.get('p2p');
             
             // If we have a shortened URL parameter, fetch the full URL first
             if (shortUrlParam) {
@@ -479,7 +684,7 @@
             
             // Handle multi-part QR code scanning
             if (partParam && totalParam && dataParam) {
-                handleMultiPartScan(parseInt(partParam), parseInt(totalParam), dataParam);
+                handleMultiPartScan(parseInt(partParam), parseInt(totalParam), dataParam, p2pParam);
                 return;
             }
             
@@ -612,16 +817,16 @@
                 // Check if we need multiple QR codes
                 if (shareableUrl.length > QR_CODE_THRESHOLD) {
                     // Split data into chunks for multiple QR codes
-                    generateMultipleQRCodes(fileData, baseUrl);
+                    await generateMultipleQRCodes(fileData, baseUrl);
                 } else {
                     // Generate single QR code
                     qrCodeInstance = new QRCode(document.getElementById('qrcode'), {
                         text: shareableUrl,
-                        width: 256,
-                        height: 256,
+                        width: 200,
+                        height: 200,
                         colorDark: '#000000',
                         colorLight: '#ffffff',
-                        correctLevel: QRCode.CorrectLevel.H
+                        correctLevel: QRCode.CorrectLevel.M
                     });
 
                     // Display share URL with info about compression
@@ -817,14 +1022,21 @@
         }
         
         // Generate multiple QR codes for large data
-        function generateMultipleQRCodes(fileData, baseUrl) {
+        async function generateMultipleQRCodes(fileData, baseUrl) {
             const fileJson = JSON.stringify(fileData);
             const encodedData = encodeURIComponent(fileJson);
             
-            // Calculate chunk size (leaving room for URL structure and chunk metadata)
-            // URL format: ?part=XXX&total=XXX&data=...
-            // Reserve 50 chars for parameter names and max 3-digit numbers
-            const urlOverhead = baseUrl.length + 50;
+            // Initialize P2P for cross-device communication
+            const p2pInfo = await initP2PSender();
+            if (p2pInfo) {
+                console.log('P2P initialized for session:', p2pInfo.sessionId);
+                // Start polling for answer from receiver
+                pollForP2PAnswer();
+            }
+            
+            // Calculate chunk size (leaving room for URL structure, chunk metadata, and P2P data)
+            // URL format: ?part=XXX&total=XXX&data=...&p2p=...
+            const urlOverhead = baseUrl.length + 100 + (p2pInfo ? p2pInfo.offer.length : 0);
             const chunkSize = QR_CODE_THRESHOLD - urlOverhead;
             const chunks = [];
             
@@ -841,7 +1053,8 @@
                 chunks: chunks,
                 baseUrl: baseUrl,
                 totalChunks: totalChunks,
-                fileData: fileData
+                fileData: fileData,
+                p2pInfo: p2pInfo
             };
             
             // Clear and prepare QR code container
@@ -939,11 +1152,16 @@
             container.style.flexWrap = 'wrap';
             container.style.justifyContent = 'center';
             
-            const { chunks, baseUrl, totalChunks } = window.qrChunksData;
+            const { chunks, baseUrl, totalChunks, p2pInfo } = window.qrChunksData;
             
             // Generate all QR codes
             chunks.forEach((chunk, index) => {
-                const chunkUrl = `${baseUrl}?part=${index + 1}&total=${totalChunks}&data=${chunk}`;
+                let chunkUrl = `${baseUrl}?part=${index + 1}&total=${totalChunks}&data=${chunk}`;
+                
+                // Add P2P info only to first QR code
+                if (index === 0 && p2pInfo) {
+                    chunkUrl += `&p2p=${p2pInfo.sessionId}:${p2pInfo.offer}`;
+                }
                 
                 // Create container for this QR code
                 const qrWrapper = document.createElement('div');
@@ -962,8 +1180,8 @@
                 // Generate QR code
                 new QRCode(qrElement, {
                     text: chunkUrl,
-                    width: 200,
-                    height: 200,
+                    width: 180,
+                    height: 180,
                     colorDark: '#000000',
                     colorLight: '#ffffff',
                     correctLevel: QRCode.CorrectLevel.M
@@ -990,7 +1208,7 @@
         function displayQRCodeAtIndex(index) {
             if (!window.qrChunksData) return;
             
-            const { chunks, baseUrl, totalChunks } = window.qrChunksData;
+            const { chunks, baseUrl, totalChunks, p2pInfo } = window.qrChunksData;
             const container = document.getElementById('qrCodesContainer');
             
             // Remove previous QR code display (keep instruction)
@@ -1012,12 +1230,17 @@
             const qrElement = document.createElement('div');
             qrWrapper.appendChild(qrElement);
             
-            // Generate QR code
-            const chunkUrl = `${baseUrl}?part=${index + 1}&total=${totalChunks}&data=${chunks[index]}`;
+            // Generate QR code URL - include P2P info only in first code
+            let chunkUrl = `${baseUrl}?part=${index + 1}&total=${totalChunks}&data=${chunks[index]}`;
+            if (index === 0 && p2pInfo) {
+                // Add P2P connection info to first QR code
+                chunkUrl += `&p2p=${p2pInfo.sessionId}:${p2pInfo.offer}`;
+            }
+            
             new QRCode(qrElement, {
                 text: chunkUrl,
-                width: 256,
-                height: 256,
+                width: 200,
+                height: 200,
                 colorDark: '#000000',
                 colorLight: '#ffffff',
                 correctLevel: QRCode.CorrectLevel.M
@@ -1068,7 +1291,21 @@
         }
         
         // Handle multi-part QR code scanning
-        function handleMultiPartScan(part, total, data) {
+        async function handleMultiPartScan(part, total, data, p2pParam) {
+            // Handle P2P connection establishment (only on first QR code)
+            if (part === 1 && p2pParam) {
+                try {
+                    const [sessionId, offerB64] = p2pParam.split(':');
+                    if (sessionId && offerB64) {
+                        console.log('Establishing P2P connection...', sessionId);
+                        await initP2PReceiver(sessionId, offerB64);
+                        updateP2PStatus('connected');
+                    }
+                } catch (error) {
+                    console.error('Failed to establish P2P connection:', error);
+                }
+            }
+            
             // Initialize storage for multi-part data if not exists
             if (!sessionStorage.getItem('multipart_total')) {
                 sessionStorage.setItem('multipart_total', total.toString());
@@ -1130,8 +1367,23 @@
                 }
                 
                 // Trigger advancement to next QR code on the sender's device
-                // This uses localStorage as a cross-tab communication mechanism
                 if (part < total) {
+                    // Try P2P first (cross-device)
+                    const p2pSent = sendP2PAdvance(part);
+                    
+                    // Also use BroadcastChannel if available (same-browser fallback)
+                    if (!p2pSent && qrBroadcastChannel) {
+                        try {
+                            qrBroadcastChannel.postMessage({
+                                type: 'advance_qr',
+                                nextPart: part
+                            });
+                        } catch (e) {
+                            console.error('Failed to send via BroadcastChannel:', e);
+                        }
+                    }
+                    
+                    // Also use localStorage as fallback for cross-tab communication
                     // Use timestamp to ensure unique value and trigger storage event
                     localStorage.setItem('qr_advance_to', `${part}_${Date.now()}`);
                     // Clean up after a short delay
