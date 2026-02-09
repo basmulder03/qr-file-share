@@ -449,6 +449,21 @@
         const QR_CODE_THRESHOLD = 2000; // 2000 characters per QR code
         // Transition delay for QR code auto-advancement (milliseconds)
         const QR_TRANSITION_DELAY_MS = 500;
+        
+        // BroadcastChannel for cross-tab communication (with fallback)
+        let qrBroadcastChannel = null;
+        try {
+            if (typeof BroadcastChannel !== 'undefined') {
+                qrBroadcastChannel = new BroadcastChannel('qr_code_channel');
+                qrBroadcastChannel.onmessage = (event) => {
+                    if (event.data.type === 'advance_qr' && event.data.nextPart !== undefined) {
+                        advanceToNextQRCode(event.data.nextPart);
+                    }
+                };
+            }
+        } catch (e) {
+            console.log('BroadcastChannel not available, using localStorage fallback');
+        }
 
         // DOM elements
         const uploadArea = document.getElementById('uploadArea');
@@ -617,11 +632,11 @@
                     // Generate single QR code
                     qrCodeInstance = new QRCode(document.getElementById('qrcode'), {
                         text: shareableUrl,
-                        width: 256,
-                        height: 256,
+                        width: 200,
+                        height: 200,
                         colorDark: '#000000',
                         colorLight: '#ffffff',
-                        correctLevel: QRCode.CorrectLevel.H
+                        correctLevel: QRCode.CorrectLevel.M
                     });
 
                     // Display share URL with info about compression
@@ -962,8 +977,8 @@
                 // Generate QR code
                 new QRCode(qrElement, {
                     text: chunkUrl,
-                    width: 200,
-                    height: 200,
+                    width: 180,
+                    height: 180,
                     colorDark: '#000000',
                     colorLight: '#ffffff',
                     correctLevel: QRCode.CorrectLevel.M
@@ -1016,8 +1031,8 @@
             const chunkUrl = `${baseUrl}?part=${index + 1}&total=${totalChunks}&data=${chunks[index]}`;
             new QRCode(qrElement, {
                 text: chunkUrl,
-                width: 256,
-                height: 256,
+                width: 200,
+                height: 200,
                 colorDark: '#000000',
                 colorLight: '#ffffff',
                 correctLevel: QRCode.CorrectLevel.M
@@ -1130,8 +1145,20 @@
                 }
                 
                 // Trigger advancement to next QR code on the sender's device
-                // This uses localStorage as a cross-tab communication mechanism
                 if (part < total) {
+                    // Use BroadcastChannel if available, otherwise use localStorage
+                    if (qrBroadcastChannel) {
+                        try {
+                            qrBroadcastChannel.postMessage({
+                                type: 'advance_qr',
+                                nextPart: part
+                            });
+                        } catch (e) {
+                            console.error('Failed to send via BroadcastChannel:', e);
+                        }
+                    }
+                    
+                    // Also use localStorage as fallback for cross-tab communication
                     // Use timestamp to ensure unique value and trigger storage event
                     localStorage.setItem('qr_advance_to', `${part}_${Date.now()}`);
                     // Clean up after a short delay
