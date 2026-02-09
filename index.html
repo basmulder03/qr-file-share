@@ -296,7 +296,7 @@
         
         // Compression threshold (files larger than this will be compressed)
         const COMPRESSION_THRESHOLD = 100 * 1024; // 100KB
-        // URL shortening threshold (URLs longer than this will be shortened)
+        // URL shortening threshold (URLs longer than this may be shortened)
         const URL_SHORTENING_THRESHOLD = 2000; // 2000 characters
 
         // DOM elements
@@ -467,6 +467,7 @@
                 if (fileData.compressed) urlInfo += ' (File compressed)';
                 if (urlShortened) urlInfo += ' (URL shortened)';
                 
+                shareUrl.innerHTML = '';
                 shareUrl.textContent = shareableUrl;
                 if (urlInfo) {
                     const infoSpan = document.createElement('div');
@@ -510,8 +511,9 @@
                     data = arrayBufferToBase64(decompressed);
                 }
                 
-                // Convert to data URL
-                const dataUrl = `data:${fileObj.type};base64,${data}`;
+                // Convert to data URL with fallback MIME type
+                const mimeType = fileObj.type || 'application/octet-stream';
+                const dataUrl = `data:${mimeType};base64,${data}`;
                 
                 const link = document.createElement('a');
                 link.href = dataUrl;
@@ -590,6 +592,7 @@
         // URL shortening using TinyURL API
         async function shortenUrl(longUrl) {
             try {
+                // Note: TinyURL API requires HTTPS for security
                 const apiUrl = `https://tinyurl.com/api-create.php?url=${encodeURIComponent(longUrl)}`;
                 const response = await fetch(apiUrl);
                 
@@ -604,18 +607,18 @@
             return null;
         }
         
-        // Handle short URL redirect
+        // Handle short URL redirect - TODO: Requires backend support
         async function handleShortUrl(shortUrl) {
             try {
-                // For now, we'll show an info message
-                // In a production environment, you'd need a backend to handle this
+                // This feature requires a backend service to resolve shortened URLs
+                // For now, we show an informative message
                 uploadSection.classList.add('hidden');
                 downloadSection.classList.remove('hidden');
                 
-                document.getElementById('downloadFileName').textContent = 'Loading...';
-                document.getElementById('downloadFileSize').textContent = 'Please wait';
+                document.getElementById('downloadFileName').textContent = 'Shortened URL Not Supported';
+                document.getElementById('downloadFileSize').textContent = '';
                 
-                showError('Shortened URL detected. Please use the original long URL for direct downloads.');
+                showError('This app cannot directly handle shortened URLs. Please use the original long URL to download files.');
             } catch (error) {
                 showError('Error handling shortened URL');
             }
