@@ -597,7 +597,10 @@
             const encodedData = encodeURIComponent(fileJson);
             
             // Calculate chunk size (leaving room for URL structure and chunk metadata)
-            const chunkSize = QR_CODE_THRESHOLD - baseUrl.length - 100; // Reserve 100 chars for params
+            // URL format: ?part=XXX&total=XXX&data=...
+            // Reserve 50 chars for parameter names and max 3-digit numbers
+            const urlOverhead = baseUrl.length + 50;
+            const chunkSize = QR_CODE_THRESHOLD - urlOverhead;
             const chunks = [];
             
             // Split encoded data into chunks
@@ -635,6 +638,7 @@
                 qrWrapper.appendChild(qrElement);
                 
                 // Generate QR code
+                // Using error correction level M (medium) to maximize data capacity for multi-part codes
                 new QRCode(qrElement, {
                     text: chunkUrl,
                     width: 200,
@@ -746,10 +750,10 @@
                     downloadBtn.disabled = false;
                     downloadBtn.style.opacity = '1';
                     
-                    // Set up download
-                    downloadBtn.addEventListener('click', async () => {
+                    // Set up download (use onclick to avoid multiple listeners)
+                    downloadBtn.onclick = async () => {
                         await downloadFile(fileObj);
-                    });
+                    };
                     
                     // Show success message
                     const successMsg = document.createElement('div');
@@ -759,12 +763,12 @@
                     successMsg.style.borderColor = '#4caf50';
                     successMsg.innerHTML = `<strong style="color: #2e7d32;">✅ Success!</strong> All ${total} QR codes scanned. Ready to download.`;
                     
-                    const downloadSection = document.getElementById('downloadSection');
-                    const existingInfo = downloadSection.querySelector('.info-box');
+                    const downloadSectionEl = document.getElementById('downloadSection');
+                    const existingInfo = downloadSectionEl.querySelector('.info-box');
                     if (existingInfo) {
                         existingInfo.replaceWith(successMsg);
                     } else {
-                        downloadSection.querySelector('.download-section').appendChild(successMsg);
+                        downloadSectionEl.querySelector('.download-section').appendChild(successMsg);
                     }
                 } catch (e) {
                     console.error('Error reconstructing file:', e);
