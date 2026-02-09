@@ -166,38 +166,115 @@
             margin: 20px 0;
         }
 
-        .qr-size-control {
-            margin: 15px 0;
-            text-align: center;
-        }
-
-        .qr-size-control label {
-            font-weight: 600;
-            color: #667eea;
-            margin-right: 10px;
-            font-size: 1rem;
-        }
-
-        .qr-size-control select {
-            padding: 8px 15px;
-            border: 2px solid #667eea;
-            border-radius: 5px;
-            background: white;
-            color: #333;
-            font-size: 1rem;
+        .enlarge-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 10px 25px;
+            font-size: 0.9rem;
+            border-radius: 25px;
             cursor: pointer;
             transition: all 0.3s ease;
+            font-weight: 600;
+            margin-top: 15px;
         }
 
-        .qr-size-control select:hover {
-            border-color: #764ba2;
-            background: #f8f9ff;
+        .enlarge-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
         }
 
-        .qr-size-control select:focus {
-            outline: none;
-            border-color: #764ba2;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+        /* Modal styles */
+        .qr-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .qr-modal.show {
+            display: flex;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+
+        .qr-modal-content {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            max-width: 90%;
+            max-height: 90%;
+            overflow: auto;
+            position: relative;
+            animation: slideUp 0.3s ease;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+        }
+
+        @keyframes slideUp {
+            from {
+                transform: translateY(50px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .qr-modal-close {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: #ff5252;
+            color: white;
+            border: none;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            font-size: 1.5rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            font-weight: bold;
+            line-height: 1;
+        }
+
+        .qr-modal-close:hover {
+            background: #d32f2f;
+            transform: rotate(90deg);
+        }
+
+        .qr-modal-title {
+            text-align: center;
+            color: #667eea;
+            margin-bottom: 20px;
+            font-size: 1.5rem;
+        }
+
+        .qr-modal-qr {
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        .qr-modal-qr img {
+            max-width: 100%;
+            height: auto;
         }
 
         .share-url {
@@ -308,16 +385,8 @@
 
             <div class="qr-container" id="qrContainer">
                 <h3 style="margin-bottom: 15px;">Scan to Download</h3>
-                <div class="qr-size-control">
-                    <label for="qrSize">QR Code Size:</label>
-                    <select id="qrSize">
-                        <option value="small">Small (200x200)</option>
-                        <option value="medium" selected>Medium (256x256)</option>
-                        <option value="large">Large (350x350)</option>
-                        <option value="xlarge">Extra Large (512x512)</option>
-                    </select>
-                </div>
                 <div id="qrcode"></div>
+                <button class="btn enlarge-btn" id="enlargeBtn">🔍 Enlarge QR Code</button>
                 <div class="share-url" id="shareUrl"></div>
                 <button class="btn copy-btn" id="copyBtn">📋 Copy Link</button>
                 <div class="info-box">
@@ -344,6 +413,15 @@
         </div>
     </div>
 
+    <!-- QR Code Enlarge Modal -->
+    <div class="qr-modal" id="qrModal">
+        <div class="qr-modal-content">
+            <button class="qr-modal-close" id="modalClose">×</button>
+            <h2 class="qr-modal-title">Enlarged QR Code</h2>
+            <div class="qr-modal-qr" id="modalQRContainer"></div>
+        </div>
+    </div>
+
     <script>
         // Global variables
         let fileData = null;
@@ -357,20 +435,6 @@
         const QR_CODE_THRESHOLD = 2000; // 2000 characters per QR code
         // Transition delay for QR code auto-advancement (milliseconds)
         const QR_TRANSITION_DELAY_MS = 500;
-
-        // QR Code size mapping
-        const QR_SIZES = {
-            small: 200,
-            medium: 256,
-            large: 350,
-            xlarge: 512
-        };
-
-        // Helper function to get selected QR code size
-        function getQRCodeSize() {
-            const sizeSelect = document.getElementById('qrSize');
-            return QR_SIZES[sizeSelect?.value || 'medium'];
-        }
 
         // DOM elements
         const uploadArea = document.getElementById('uploadArea');
@@ -537,11 +601,10 @@
                     generateMultipleQRCodes(fileData, baseUrl);
                 } else {
                     // Generate single QR code
-                    const qrSize = getQRCodeSize();
                     qrCodeInstance = new QRCode(document.getElementById('qrcode'), {
                         text: shareableUrl,
-                        width: qrSize,
-                        height: qrSize,
+                        width: 256,
+                        height: 256,
                         colorDark: '#000000',
                         colorLight: '#ffffff',
                         correctLevel: QRCode.CorrectLevel.H
@@ -581,11 +644,71 @@
             });
         });
 
-        // QR Size selector change handler
-        document.getElementById('qrSize').addEventListener('change', () => {
-            // If a QR code is currently displayed, regenerate it with the new size
-            if (qrCodeInstance || window.qrChunksData) {
-                generateQRCodes();
+        // Enlarge button and modal handlers
+        const enlargeBtn = document.getElementById('enlargeBtn');
+        const qrModal = document.getElementById('qrModal');
+        const modalClose = document.getElementById('modalClose');
+        const modalQRContainer = document.getElementById('modalQRContainer');
+
+        enlargeBtn.addEventListener('click', () => {
+            // Clone the current QR code display into the modal
+            modalQRContainer.innerHTML = '';
+            
+            if (window.qrChunksData) {
+                // For multiple QR codes, show the current one that's displayed
+                const currentQR = document.querySelector('#qrCodesContainer .qr-single-display');
+                if (currentQR) {
+                    const clone = currentQR.cloneNode(true);
+                    // Scale up the QR code by changing the styles
+                    const qrImg = clone.querySelector('img');
+                    if (qrImg) {
+                        qrImg.style.width = '512px';
+                        qrImg.style.height = '512px';
+                    }
+                    modalQRContainer.appendChild(clone);
+                } else {
+                    // Show all codes mode - enlarge all
+                    const allCodes = document.querySelectorAll('#qrCodesContainer .qr-wrapper');
+                    allCodes.forEach(wrapper => {
+                        const clone = wrapper.cloneNode(true);
+                        const qrImg = clone.querySelector('img');
+                        if (qrImg) {
+                            qrImg.style.width = '400px';
+                            qrImg.style.height = '400px';
+                        }
+                        modalQRContainer.appendChild(clone);
+                    });
+                }
+            } else {
+                // For single QR code, enlarge it
+                const qrDiv = document.getElementById('qrcode');
+                const clone = qrDiv.cloneNode(true);
+                const qrImg = clone.querySelector('img');
+                if (qrImg) {
+                    qrImg.style.width = '512px';
+                    qrImg.style.height = '512px';
+                }
+                modalQRContainer.appendChild(clone);
+            }
+            
+            qrModal.classList.add('show');
+        });
+
+        modalClose.addEventListener('click', () => {
+            qrModal.classList.remove('show');
+        });
+
+        // Close modal when clicking outside the content
+        qrModal.addEventListener('click', (e) => {
+            if (e.target === qrModal) {
+                qrModal.classList.remove('show');
+            }
+        });
+
+        // Close modal with Escape key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && qrModal.classList.contains('show')) {
+                qrModal.classList.remove('show');
             }
         });
 
@@ -823,11 +946,10 @@
                 qrWrapper.appendChild(qrElement);
                 
                 // Generate QR code
-                const qrSize = getQRCodeSize();
                 new QRCode(qrElement, {
                     text: chunkUrl,
-                    width: qrSize,
-                    height: qrSize,
+                    width: 200,
+                    height: 200,
                     colorDark: '#000000',
                     colorLight: '#ffffff',
                     correctLevel: QRCode.CorrectLevel.M
@@ -878,11 +1000,10 @@
             
             // Generate QR code
             const chunkUrl = `${baseUrl}?part=${index + 1}&total=${totalChunks}&data=${chunks[index]}`;
-            const qrSize = getQRCodeSize();
             new QRCode(qrElement, {
                 text: chunkUrl,
-                width: qrSize,
-                height: qrSize,
+                width: 256,
+                height: 256,
                 colorDark: '#000000',
                 colorLight: '#ffffff',
                 correctLevel: QRCode.CorrectLevel.M
