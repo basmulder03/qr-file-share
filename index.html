@@ -166,6 +166,40 @@
             margin: 20px 0;
         }
 
+        .qr-size-control {
+            margin: 15px 0;
+            text-align: center;
+        }
+
+        .qr-size-control label {
+            font-weight: 600;
+            color: #667eea;
+            margin-right: 10px;
+            font-size: 1rem;
+        }
+
+        .qr-size-control select {
+            padding: 8px 15px;
+            border: 2px solid #667eea;
+            border-radius: 5px;
+            background: white;
+            color: #333;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .qr-size-control select:hover {
+            border-color: #764ba2;
+            background: #f8f9ff;
+        }
+
+        .qr-size-control select:focus {
+            outline: none;
+            border-color: #764ba2;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+        }
+
         .share-url {
             background: #f0f2ff;
             padding: 15px;
@@ -274,6 +308,15 @@
 
             <div class="qr-container" id="qrContainer">
                 <h3 style="margin-bottom: 15px;">Scan to Download</h3>
+                <div class="qr-size-control">
+                    <label for="qrSize">QR Code Size:</label>
+                    <select id="qrSize">
+                        <option value="small">Small (200x200)</option>
+                        <option value="medium" selected>Medium (256x256)</option>
+                        <option value="large">Large (350x350)</option>
+                        <option value="xlarge">Extra Large (512x512)</option>
+                    </select>
+                </div>
                 <div id="qrcode"></div>
                 <div class="share-url" id="shareUrl"></div>
                 <button class="btn copy-btn" id="copyBtn">📋 Copy Link</button>
@@ -314,6 +357,20 @@
         const QR_CODE_THRESHOLD = 2000; // 2000 characters per QR code
         // Transition delay for QR code auto-advancement (milliseconds)
         const QR_TRANSITION_DELAY_MS = 500;
+
+        // QR Code size mapping
+        const QR_SIZES = {
+            small: 200,
+            medium: 256,
+            large: 350,
+            xlarge: 512
+        };
+
+        // Helper function to get selected QR code size
+        function getQRCodeSize() {
+            const sizeSelect = document.getElementById('qrSize');
+            return QR_SIZES[sizeSelect?.value || 'medium'];
+        }
 
         // DOM elements
         const uploadArea = document.getElementById('uploadArea');
@@ -474,10 +531,11 @@
                     generateMultipleQRCodes(fileData, baseUrl);
                 } else {
                     // Generate single QR code
+                    const qrSize = getQRCodeSize();
                     qrCodeInstance = new QRCode(document.getElementById('qrcode'), {
                         text: shareableUrl,
-                        width: 256,
-                        height: 256,
+                        width: qrSize,
+                        height: qrSize,
                         colorDark: '#000000',
                         colorLight: '#ffffff',
                         correctLevel: QRCode.CorrectLevel.H
@@ -515,6 +573,18 @@
                     copyBtn.textContent = originalText;
                 }, 2000);
             });
+        });
+
+        // QR Size selector change handler
+        document.getElementById('qrSize').addEventListener('change', () => {
+            // If a QR code is currently displayed, regenerate it with the new size
+            if (qrCodeInstance || window.qrChunksData) {
+                const generateButton = document.getElementById('generateBtn');
+                if (generateButton) {
+                    // Trigger regeneration
+                    generateButton.click();
+                }
+            }
         });
 
         // Download file
@@ -751,10 +821,11 @@
                 qrWrapper.appendChild(qrElement);
                 
                 // Generate QR code
+                const qrSize = getQRCodeSize();
                 new QRCode(qrElement, {
                     text: chunkUrl,
-                    width: 200,
-                    height: 200,
+                    width: qrSize,
+                    height: qrSize,
                     colorDark: '#000000',
                     colorLight: '#ffffff',
                     correctLevel: QRCode.CorrectLevel.M
@@ -805,10 +876,11 @@
             
             // Generate QR code
             const chunkUrl = `${baseUrl}?part=${index + 1}&total=${totalChunks}&data=${chunks[index]}`;
+            const qrSize = getQRCodeSize();
             new QRCode(qrElement, {
                 text: chunkUrl,
-                width: 256,
-                height: 256,
+                width: qrSize,
+                height: qrSize,
                 colorDark: '#000000',
                 colorLight: '#ffffff',
                 correctLevel: QRCode.CorrectLevel.M
