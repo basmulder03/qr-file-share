@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QR File Share</title>
+    <script src="qrcode.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #333;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 40px;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            margin-bottom: 30px;
+        }
+
+        .section-title {
+            font-size: 1.5rem;
+            margin-bottom: 20px;
+            color: #667eea;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .upload-area {
+            border: 3px dashed #667eea;
+            border-radius: 10px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: #f8f9ff;
+        }
+
+        .upload-area:hover {
+            background: #f0f2ff;
+            border-color: #764ba2;
+        }
+
+        .upload-area.dragover {
+            background: #e8ebff;
+            border-color: #764ba2;
+        }
+
+        .upload-icon {
+            font-size: 3rem;
+            margin-bottom: 15px;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            font-size: 1rem;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .file-info {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f0f2ff;
+            border-radius: 8px;
+            display: none;
+        }
+
+        .file-info.show {
+            display: block;
+        }
+
+        .file-name {
+            font-weight: 600;
+            color: #667eea;
+            margin-bottom: 5px;
+        }
+
+        .file-size {
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .qr-container {
+            margin-top: 30px;
+            text-align: center;
+            display: none;
+        }
+
+        .qr-container.show {
+            display: block;
+        }
+
+        #qrcode {
+            display: inline-block;
+            padding: 20px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            margin: 20px 0;
+        }
+
+        .share-url {
+            background: #f0f2ff;
+            padding: 15px;
+            border-radius: 8px;
+            word-break: break-all;
+            font-family: monospace;
+            margin: 20px 0;
+            border: 2px solid #667eea;
+        }
+
+        .copy-btn {
+            background: #4caf50;
+            margin-top: 10px;
+        }
+
+        .copy-btn:hover {
+            box-shadow: 0 10px 25px rgba(76, 175, 80, 0.4);
+        }
+
+        .download-section {
+            text-align: center;
+        }
+
+        .download-info {
+            background: #f0f2ff;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+
+        .download-btn {
+            background: linear-gradient(135deg, #4caf50 0%, #45a049 100%);
+            font-size: 1.2rem;
+            padding: 15px 40px;
+        }
+
+        .error-message {
+            background: #ffe0e0;
+            color: #d32f2f;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            display: none;
+        }
+
+        .error-message.show {
+            display: block;
+        }
+
+        .info-box {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            border-left: 4px solid #2196f3;
+        }
+
+        .info-box strong {
+            color: #1976d2;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        @media (max-width: 600px) {
+            .header h1 {
+                font-size: 2rem;
+            }
+
+            .card {
+                padding: 20px;
+            }
+
+            .upload-area {
+                padding: 30px 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📱 QR File Share</h1>
+            <p>Share files instantly with QR codes</p>
+        </div>
+
+        <!-- Upload Section -->
+        <div class="card" id="uploadSection">
+            <h2 class="section-title">
+                <span>📤</span> Upload File
+            </h2>
+            
+            <div class="upload-area" id="uploadArea">
+                <div class="upload-icon">📁</div>
+                <h3>Drag & Drop or Click to Upload</h3>
+                <p style="margin-top: 10px; color: #666;">Choose any file to share</p>
+                <input type="file" id="fileInput" accept="*/*">
+            </div>
+
+            <div class="file-info" id="fileInfo">
+                <div class="file-name" id="fileName"></div>
+                <div class="file-size" id="fileSize"></div>
+                <button class="btn" id="generateBtn" style="margin-top: 15px;">Generate QR Code</button>
+            </div>
+
+            <div class="qr-container" id="qrContainer">
+                <h3 style="margin-bottom: 15px;">Scan to Download</h3>
+                <div id="qrcode"></div>
+                <div class="share-url" id="shareUrl"></div>
+                <button class="btn copy-btn" id="copyBtn">📋 Copy Link</button>
+                <div class="info-box">
+                    <strong>How to use:</strong> Scan the QR code or share the link to download the file on another device.
+                </div>
+            </div>
+
+            <div class="error-message" id="errorMessage"></div>
+        </div>
+
+        <!-- Download Section -->
+        <div class="card hidden" id="downloadSection">
+            <h2 class="section-title">
+                <span>📥</span> Download File
+            </h2>
+            
+            <div class="download-section">
+                <div class="download-info">
+                    <div class="file-name" id="downloadFileName"></div>
+                    <div class="file-size" id="downloadFileSize"></div>
+                </div>
+                <button class="btn download-btn" id="downloadBtn">⬇️ Download File</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let fileData = null;
+        let fileName = null;
+        let qrCodeInstance = null;
+
+        // DOM elements
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const fileInfo = document.getElementById('fileInfo');
+        const generateBtn = document.getElementById('generateBtn');
+        const qrContainer = document.getElementById('qrContainer');
+        const shareUrl = document.getElementById('shareUrl');
+        const copyBtn = document.getElementById('copyBtn');
+        const errorMessage = document.getElementById('errorMessage');
+        const uploadSection = document.getElementById('uploadSection');
+        const downloadSection = document.getElementById('downloadSection');
+
+        // Check if we're in download mode (URL has file data)
+        window.addEventListener('DOMContentLoaded', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const fileParam = urlParams.get('file');
+            
+            if (fileParam) {
+                try {
+                    const decodedData = decodeURIComponent(fileParam);
+                    const fileObj = JSON.parse(decodedData);
+                    
+                    // Show download section
+                    uploadSection.classList.add('hidden');
+                    downloadSection.classList.remove('hidden');
+                    
+                    // Display file info
+                    document.getElementById('downloadFileName').textContent = `📄 ${fileObj.name}`;
+                    document.getElementById('downloadFileSize').textContent = formatFileSize(fileObj.size);
+                    
+                    // Set up download
+                    document.getElementById('downloadBtn').addEventListener('click', () => {
+                        downloadFile(fileObj.data, fileObj.name, fileObj.type);
+                    });
+                } catch (e) {
+                    showError('Invalid file data in URL');
+                }
+            }
+        });
+
+        // Upload area click
+        uploadArea.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        // File input change
+        fileInput.addEventListener('change', (e) => {
+            handleFile(e.target.files[0]);
+        });
+
+        // Drag and drop
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            handleFile(e.dataTransfer.files[0]);
+        });
+
+        // Handle file
+        function handleFile(file) {
+            if (!file) return;
+
+            // Check file size (limit to 5MB for URL compatibility)
+            if (file.size > 5 * 1024 * 1024) {
+                showError('File size must be less than 5MB for optimal sharing');
+                return;
+            }
+
+            fileName = file.name;
+            
+            // Read file as base64
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                fileData = {
+                    name: file.name,
+                    type: file.type,
+                    size: file.size,
+                    data: e.target.result
+                };
+
+                // Show file info
+                document.getElementById('fileName').textContent = `📄 ${file.name}`;
+                document.getElementById('fileSize').textContent = formatFileSize(file.size);
+                fileInfo.classList.add('show');
+                
+                // Hide previous QR code
+                qrContainer.classList.remove('show');
+                errorMessage.classList.remove('show');
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // Generate QR code
+        generateBtn.addEventListener('click', () => {
+            if (!fileData) return;
+
+            try {
+                // Create URL with file data
+                const fileJson = JSON.stringify(fileData);
+                const encodedData = encodeURIComponent(fileJson);
+                const shareableUrl = `${window.location.origin}${window.location.pathname}?file=${encodedData}`;
+
+                // Clear previous QR code
+                document.getElementById('qrcode').innerHTML = '';
+
+                // Generate new QR code
+                qrCodeInstance = new QRCode(document.getElementById('qrcode'), {
+                    text: shareableUrl,
+                    width: 256,
+                    height: 256,
+                    colorDark: '#000000',
+                    colorLight: '#ffffff',
+                    correctLevel: QRCode.CorrectLevel.H
+                });
+
+                // Display share URL
+                shareUrl.textContent = shareableUrl;
+
+                // Show QR container
+                qrContainer.classList.add('show');
+                
+                // Scroll to QR code
+                qrContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            } catch (e) {
+                showError('Error generating QR code. File might be too large.');
+            }
+        });
+
+        // Copy URL
+        copyBtn.addEventListener('click', () => {
+            const url = shareUrl.textContent;
+            navigator.clipboard.writeText(url).then(() => {
+                const originalText = copyBtn.textContent;
+                copyBtn.textContent = '✅ Copied!';
+                setTimeout(() => {
+                    copyBtn.textContent = originalText;
+                }, 2000);
+            });
+        });
+
+        // Download file
+        function downloadFile(dataUrl, filename, mimeType) {
+            const link = document.createElement('a');
+            link.href = dataUrl;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // Format file size
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+        }
+
+        // Show error
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorMessage.classList.add('show');
+            setTimeout(() => {
+                errorMessage.classList.remove('show');
+            }, 5000);
+        }
+    </script>
+</body>
+</html>
